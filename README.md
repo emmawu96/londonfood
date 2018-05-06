@@ -7,4 +7,7 @@ The shinyapp, "yelp_london", analyzes and presents realtime Yelp data on London 
 Realtime data downloaded through Yelp Fusion API, shown in "yelp.R"<br>
 URL of published shiny dashboard:<br>
 https://emmawubu.shinyapps.io/yelp_london/
- 
+
+#### new packages:
+* library(munsell)<br>
+* library(reshape2)
