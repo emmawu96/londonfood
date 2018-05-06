@@ -23,18 +23,20 @@ data <- read_csv("tripadvisor_co_uk-travel_restaurant_reviews_sample.csv")
 
 ## Outline
 
-- Introduction
-- Dataset
-- Data Summary
-- Food score vs. overall score
-- Value score vs. overall score
-- Service score vs. overall score
-- Relationship among different scores
-- Linear Regression
-- Text Analysis
-- Sentiment Analysis
-- Wordcloud
-- Map
+- [Introduction](#3)
+- [Dataset](#4)
+- [Data Summary](#5)
+- [Food score vs. overall score](#6)
+- [Value score vs. overall score](#7)
+- [Service score vs. overall score](#8)
+- [Relationship among different scores](#9)
+- [Linear Regression](#10)
+- [Text Analysis on Review Text](#12)
+- [Sentiment Analysis on Review Text](#13)
+- [Text Analysis on Review Title](#17)
+- [Sentiment Analysis on Review Title](#18)
+- [Wordcloud](#19)
+- [Map](#20)
 
 
 ## Introduction

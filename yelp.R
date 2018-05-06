@@ -94,26 +94,6 @@ results_list2 <- lapply(results3, FUN = yelp_parse2)
 payload2 <- do.call("rbind", results_list2)
 payload2$distance <- payload2$distance/100
 
-# yelp_price <- function(x){
-#   rnames <- names(x)
-#   if ("price" %in% rnames==FALSE){
-#     x[["price"]] <- ""
-#   }
-#   #x
-#   if (class(x)=="list") {
-#     df <- data.frame(
-#       name=x$name,
-#       rating = x$rating,
-#       review_count = x$review_count,
-#       price = nchar(x$price)
-#     )
-#   }
-#   df
-#   
-# }
-
-# price_list<- lapply(results3, FUN = yelp_price)
-
 ## comparison between tripadvisor and yelp
 colnames(payload2)[colnames(payload2)=="rating"] <- "score"
 colnames(avg_score)[colnames(avg_score)=="avg_score"] <- "score"
