@@ -1,0 +1,300 @@
+---
+title: "MA415 Final Project - A Glance at London Restaurants"
+author: "Yue Wu"
+date: "5/6/2018"
+output: 
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+#install.packages("munsell")
+library(munsell)
+library(ggplot2)
+library(dplyr)
+
+data <- read_csv("tripadvisor_co_uk-travel_restaurant_reviews_sample.csv")
+
+```
+
+
+## Outline
+
+- Introduction
+- Dataset
+- Data Summary
+- Food score vs. overall score
+- Value score vs. overall score
+- Service score vs. overall score
+- Relationship among different scores
+- Linear Regression
+- Text Analysis
+- Sentiment Analysis
+- Wordcloud
+- Map
+
+
+## Introduction
+This analysis focus on online reviews and scores for restaurants, especially the factors behind the scores. We will look at factors such as different sector scores and location. 
+
+
+##What's the data set about?
+- The dataset contains reviews and ratings of restaurants in the UK from year 2008 to 2017 from Tripadvisor. The goal is to take a closer look at factors behind the ratings, and how are restaurants in London overall.
+- This dataset was created by PromptCloud's in-house web-crawling service. 
+- Original dataset can be found [here](https://data.world/promptcloud/london-based-restaurants-reviews-on-tripadvisor-co-uk)
+
+## Data Summary
+
+The first thing to do is to better tidying the data Only desirable variables are kept, and rating related variables are transformed into numeric.
+
+```{r clean, warning=FALSE, echo=FALSE}
+data1 <- select(data,c("restaurant_id","name","review_date","title","review_text","author","location","rating","food","value","service","visited_on"))
+
+## now get the count for each column
+count<- apply(data1, 2, n_distinct)
+
+#change rating variables to numeric
+data2 <- data1 %>% 
+          filter(str_detect(location, 'London')) %>%
+          separate(rating,into= c("score","other"), sep= "of")  %>% 
+          separate(food,into= c("food","fother"), sep= "of")  %>% 
+          separate(value,into= c("value","vother"), sep= "of") %>% 
+          separate(service,into= c("service","sother"), sep= "of") 
+data2 <- data2 %>% select(-c(other,fother,vother,sother)) 
+
+data2$score <- as.numeric(data2$score)
+data2$food <- as.numeric(data2$food)
+data2$value <- as.numeric(data2$value)
+data2$service <- as.numeric(data2$service)
+
+#group by restaurants
+data3<- as.tibble(data2)
+by_res <- data3 %>% group_by(name)
+
+
+```
+Here is the summary of the tidy data:
+```{r kable, warning=FALSE, echo=FALSE,fig.height=6,fig.width=8}
+library(knitr)
+kable(summary(by_res[!names(by_res)=="restaurant_id"],na.rm=TRUE))
+```
+
+
+## food score vs. overall score
+
+Now let's look at what we are interested in -- restaurant ratings and potential factors.<br>
+From the t-test, we can see that the food score and overall score have significantly different means. 
+```{r ttest1,eval=TRUE, echo= TRUE}
+#t test on means of the scores
+## overall score vs. food
+t.test(by_res$score,by_res$food, na.action=na.omit)
+```
+
+## value score vs. overall score
+The second t-test shows that value score also has a significantly different mean from the overall score.
+```{r ttest2,eval=TRUE, echo= TRUE}
+## overall score vs. value
+t.test(by_res$score,by_res$value, na.action=na.omit)
+```
+## service score vs. overall score
+The last t-test shows that service score also has a significantly different mean from the overall score.
+```{r ttest3,eval=TRUE, echo= TRUE}
+## overall score vs. service
+t.test(by_res$score,by_res$service, na.action=na.omit)
+```
+
+## Relationship among Different Scores
+- All three tests show that people rate food, value and service differently. The sector scores reflect specific aspects of a reviewer's experience, rather than a same reflection of their overall experience across the sectors.
+- Let's take a better look at how different scores impact the overall score. Is the overall score simply the average of the other three scores?
+
+## Linear Regression
+```{r reg, eval=TRUE, echo=FALSE}
+#linear regression
+linearMod <- lm(score ~ food + value + service , data=by_res)
+summary(linearMod)
+#layout(matrix(c(1,2,3,4),2,2))
+#plot(linearMod)
+```
+
+## Linear Regression
+- It is safe to say that the overall score is not the average of the other three scores.
+- More specifically, food score occupies more proportion in overall score components than the other two.
+- Afterall, food is what a restaurant is mainly about.
+
+## Text Analysis - Reviews
+Enough with the scores, let's look at what people say in their reviews.<br>
+Here are the top words in reviews:
+```{r text, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+#text analysis
+library(stringr)
+library(tidytext)
+
+## analysis on review_text
+data4 <-separate(data3,visited_on,c("month","year"))
+scores <- data4 %>%
+  select(name,score,year) %>%
+  group_by(name,year) %>%
+  summarise(score = mean(score))
+
+original_texts <- data4 %>% select(c("name","year","review_text")) %>%
+                  group_by(name,year)
+#data(stop_words)
+
+tidy_reviews <- original_texts %>%
+  unnest_tokens(word, review_text) %>% 
+  ungroup() %>%
+  anti_join(stop_words)
+
+tidy_reviews %>%
+  count(word, sort = TRUE) %>% head()
+
+```
+Again, food experience is very important to reviewers. We also see "service","staff" and "time" among the mostly used words, indicating the significance of service experience.
+
+## Sentiment Analysis - Reviews
+Reviewers express a lot of emotions in their reviews. How does sentiments in the reviews inpact the scores? Here is the sentiment-score analysis of reviews using the bing lexicon. Note that,
+$$sentiment = n_{pos words} - n_{neg words}$$
+
+```{r sent1, echo=FALSE, message=FALSE, warning=FALSE,fig.height=4}
+###bing sentiments
+bing_pos <- get_sentiments("bing") %>%
+  filter(sentiment=="positive")
+bing_neg <- get_sentiments("bing") %>%
+  filter(sentiment=="negative")
+
+###sentiment analysis
+review_sentiments <- tidy_reviews %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(name, year, sentiment, sort = TRUE) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  inner_join(scores)
+
+### plots of sentiment on scores
+review_plot <- ggplot(review_sentiments, aes(score, sentiment,color=year))
+review_plot +
+  geom_point(show.legend = FALSE) +
+  coord_cartesian(ylim = c(-15, 180)) 
+```
+
+## Sentiment Analysis - Reviews
+We see a positive relationship between sentiment and scores, except around score of 5. This could be due to a decrease in overall word counts for full-score reviews. Typically, those giving full scores can feel less needs to give detailed reviews. -- Don't we all rate our Uber drivers 5 stars when things go well?
+```{r sent2, echo=FALSE, message=FALSE, warning=FALSE}
+#### scatter with smooth line
+review_plot +
+  stat_smooth(se=F)
+```
+
+## Sentiment Analysis - Regression
+Using linear regression, we can see that sentiment definitely has a positive relationship with score. The magnitude of the correlation varies lightly between different years. 
+```{r sent3, echo=FALSE, message=FALSE, warning=FALSE}
+### regression analysis
+linearMod2 <- lm(sentiment ~ score , data=review_sentiments)
+summary(linearMod2)
+```
+
+## Sentiment Analysis - Regression
+```{r sent3_2, echo=FALSE, message=FALSE, warning=FALSE}
+review_plot +
+  geom_point(show.legend = FALSE) +
+  geom_smooth(method='lm',formula=y~x,se=F)
+```
+
+## Text Analysis - Review Titles
+Let's also look at the texts in the review titles. <br>
+Again, "food" is the top word.
+```{r sent4, echo=FALSE, message=FALSE, warning=FALSE}
+## analysis on review title
+original_titles <- data4 %>% select(c("name","year","title")) %>%
+  group_by(name,year)
+tidy_titles <- original_titles %>%
+  unnest_tokens(word, title) %>% 
+  ungroup()%>%
+  anti_join(stop_words)
+
+tidy_titles %>%
+  count(word, sort = TRUE)
+```
+
+## Sentiment Analysis - Review Titles
+Looking at the sentiments of review titles, we see a much smaller range of sentiment values, which can be a result of the shorter length of titles. <br>
+However, there is still a positive correlation between title sentiment and scores.  
+```{r sent5, echo=FALSE, message=FALSE, warning=FALSE}
+###sentiment analysis
+title_sentiments <- tidy_titles %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(name, year, sentiment, sort = TRUE) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  inner_join(scores)
+
+### plots of sentiment on scores
+title_plot <- ggplot(title_sentiments, aes(score, sentiment,color=year))
+title_plot +
+  geom_point(show.legend = FALSE) +
+  coord_cartesian(ylim = c(-10, 45)) 
+```
+
+## Wordclouds
+Review Text Cloud               |               Review Title Cloud
+--------------------------------|--------------------------------------
+```{r wc1,echo=FALSE,warning=FALSE,message=FALSE,fig.height=5,fig.width=4.7}
+### review wordcloud
+library(wordcloud)
+library(reshape2)
+library(tidytext)
+tidy_reviews %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"),scale=c(3,0.2),
+                   max.words = 200,main="Review Text Cloud")
+```
+|
+```{r wc2,echo=FALSE,warning=FALSE,message=FALSE,fig.height=5,fig.width=4.5}
+tidy_titles %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"), scale=c(3,0.2),
+                   max.words = 200)
+```
+
+## Fantastic Restaurants and Where to Find Them
+Check out where good restaurants are located in London. 
+<br> Note that central London has a lot of high-score restaurants, as well as low-score ones. 
+<br> There are areas with higher density of low-score than high-score places - Be aware!
+```{r map, echo=FALSE, message=FALSE, warning=FALSE}
+# map of the restaurants
+library(ggmap)
+london <- geocode("london, england")
+map <- get_map(london, zoom=11)    ##modify the map location to adjust the view
+
+# data frame with name and avg score
+avg_score <- scores %>% group_by(name) %>%
+  summarise(avg_score=mean(score, na.rm = TRUE))
+
+# high variable: 1 if avg_score higher than 4
+avg_score$high<- as.numeric(avg_score$avg_score>=4)
+avg_score$high <- cut(avg_score$high, breaks = c(0,0.1,1), labels = c(0,1)) 
+
+# geocodes for the restaurants
+## pre-downloaded geocodes
+load("data1.RData")
+#avg_score$geo <- geocode(paste(avg_score$name,"london, england", sep=", "))
+circle_scale_amt = 0.3
+
+# map with circle size depending on avg score
+ggmap(map) +
+  geom_point(
+    aes(x = geo$lon, y = geo$lat, colour = score),
+    data = avg_score,
+    alpha=0.4, size=(avg_score$score^2)*circle_scale_amt)+ 
+  scale_size_continuous(range=range(avg_score$score)) +
+  scale_color_distiller(type = "seq", palette = "Spectral")
+```
+
+> ggmap: Spatial Visualization with ggplot2.

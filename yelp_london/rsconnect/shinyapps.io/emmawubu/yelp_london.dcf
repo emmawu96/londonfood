@@ -1,0 +1,12 @@
+name: yelp_london
+title: yelp_london
+username:
+account: emmawubu
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 338248
+bundleId: 1358827
+url: https://emmawubu.shinyapps.io/yelp_london/
+when: 1525634279.71517
+asMultiple: FALSE
+asStatic: FALSE
